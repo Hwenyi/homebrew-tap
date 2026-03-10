@@ -1,0 +1,84 @@
+name: Update stock-cli formula
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Resolve latest version and checksums
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_url="https://api.github.com/repos/Hwenyi/stock-cli/releases/latest"
+          release_json=$(curl -fsSL "$api_url")
+
+          tag=$(jq -r '.tag_name' <<<"$release_json")
+          version="${tag#v}"
+
+          arm_url="https://github.com/Hwenyi/stock-cli/releases/download/${tag}/stock-cli_v${version}_darwin-arm64"
+          arm_sha=$(curl -fsSL "$arm_url" | sha256sum | awk '{print $1}')
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "arm_sha=$arm_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update formula file
+        shell: bash
+        run: |
+          cat > Formula/stock-cli.rb <<'FORMULA'
+          class StockCli < Formula
+            desc "CLI for fetching HK and US stock quotes with stock-sdk"
+            homepage "https://github.com/Hwenyi/stock-cli"
+            version "${{ steps.meta.outputs.version }}"
+            license "MIT"
+
+            if Hardware::CPU.arm?
+              url "https://github.com/Hwenyi/stock-cli/releases/download/v#{version}/stock-cli_v#{version}_darwin-arm64"
+              sha256 "${{ steps.meta.outputs.arm_sha }}"
+            else
+              odie "stock-cli currently publishes Homebrew binaries only for macOS Apple Silicon."
+            end
+
+            def install
+              bin.install "stock-cli_v#{version}_darwin-arm64" => "stock-cli"
+            end
+
+            test do
+              output = shell_output("#{bin}/stock-cli help")
+              assert_match "stock-cli", output
+            end
+          end
+          FORMULA
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if git diff --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/stock-cli.rb
+          git commit -m "chore: bump stock-cli to ${{ steps.meta.outputs.version }}"
+          git push
