@@ -1,12 +1,12 @@
 class StockCli < Formula
   desc "CLI for fetching HK and US stock quotes with stock-sdk"
   homepage "https://github.com/Hwenyi/stock-cli"
-  version "1.0.1"
+  version "1.1.0"
   license "MIT"
 
   if Hardware::CPU.arm?
     url "https://github.com/Hwenyi/stock-cli/releases/download/v#{version}/stock-cli_v#{version}_darwin-arm64"
-    sha256 "e98ae560bb74291495b0ae38f6bad3504b8ca6c69deb08f4ecfe18a25fbdf55d"
+    sha256 "2b57f6d242abe37fba38ce7ce8ba22540934eaf8d0217eedf3711aa6ce9d4773"
   else
     odie "stock-cli currently publishes Homebrew binaries only for macOS Apple Silicon."
   end
